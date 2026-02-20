@@ -1,109 +1,148 @@
-const dropzone = document.getElementById("dropzone");
-const fileInput = document.getElementById("fileInput");
-const pickBtn = document.getElementById("pickBtn");
+/* global FFmpeg */
+const { createFFmpeg, fetchFile } = FFmpeg;
+
+const urlInput = document.getElementById("urlInput");
+const loadBtn = document.getElementById("loadBtn");
 const convertBtn = document.getElementById("convertBtn");
-const fileList = document.getElementById("fileList");
-const logEl = document.getElementById("log");
 const bitrateEl = document.getElementById("bitrate");
+const bar = document.getElementById("bar");
+const statusEl = document.getElementById("status");
+const downloadA = document.getElementById("download");
 
-let files = [];
+const ffmpeg = createFFmpeg({
+  log: false,
+  // progress ratio is 0..1
+  progress: ({ ratio }) => setProgress(Math.round(ratio * 100)),
+});
 
-function log(msg) {
-  logEl.textContent = msg;
+let loaded = null; // { bytes: Uint8Array, name: string, mime: string }
+
+function setStatus(msg) { statusEl.textContent = msg; }
+function setProgress(pct) { bar.style.width = `${Math.max(0, Math.min(100, pct))}%`; }
+
+function guessExtFromMime(mime) {
+  const map = {
+    "audio/mpeg": "mp3",
+    "audio/mp3": "mp3",
+    "audio/wav": "wav",
+    "audio/x-wav": "wav",
+    "audio/ogg": "ogg",
+    "audio/aac": "aac",
+    "audio/mp4": "m4a",
+    "audio/webm": "webm",
+    "application/ogg": "ogg",
+  };
+  return map[mime] || "bin";
 }
 
-function formatBytes(bytes) {
-  const units = ["B","KB","MB","GB"];
-  let i = 0;
-  let v = bytes;
-  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
-  return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-}
-
-function render() {
-  fileList.innerHTML = "";
-  for (const f of files) {
-    const li = document.createElement("li");
-    li.className = "item";
-    li.innerHTML = `
-      <div class="top">
-        <div class="name">${f.name}</div>
-        <div class="meta">${formatBytes(f.size)}</div>
-      </div>
-      <div class="progress"><div></div></div>
-      <div class="meta status">Prêt</div>
-    `;
-    li._bar = li.querySelector(".progress > div");
-    li._status = li.querySelector(".status");
-    f._li = li;
-    fileList.appendChild(li);
+function filenameFromUrl(url, fallback = "audio") {
+  try {
+    const u = new URL(url);
+    const last = u.pathname.split("/").filter(Boolean).pop() || fallback;
+    return decodeURIComponent(last);
+  } catch {
+    return fallback;
   }
-  convertBtn.disabled = files.length === 0;
 }
 
-function addFiles(list) {
-  const incoming = Array.from(list).filter(x => x.type.startsWith("audio/"));
-  files.push(...incoming);
-  log(incoming.length ? "" : "Aucun fichier audio détecté.");
-  render();
+function isDirectAudioUrl(url) {
+  // heuristic only; real check will be Content-Type
+  return /\.(mp3|wav|ogg|aac|m4a|webm)(\?.*)?$/i.test(url);
 }
 
-pickBtn.addEventListener("click", () => fileInput.click());
-fileInput.addEventListener("change", (e) => addFiles(e.target.files));
-
-dropzone.addEventListener("dragover", (e) => {
-  e.preventDefault();
-  dropzone.classList.add("dragover");
-});
-dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
-dropzone.addEventListener("drop", (e) => {
-  e.preventDefault();
-  dropzone.classList.remove("dragover");
-  addFiles(e.dataTransfer.files);
-});
-
-/**
- * Conversion MP3:
- * - Pour rester 100% côté navigateur, on utilise typiquement FFmpeg.wasm.
- * - Ici je laisse un "hook" où brancher la conversion.
- * Je peux te fournir l’intégration complète FFmpeg.wasm + téléchargement du MP3,
- * tant qu’on convertit des fichiers importés localement (pas extraction depuis plateformes).
- */
-async function convertOne(file, bitrate) {
-  // TODO: brancher FFmpeg.wasm (WASM) ici
-  // Doit retourner un Blob MP3
-  throw new Error("Conversion non branchée (FFmpeg.wasm).");
-}
-
-function downloadBlob(blob, filename) {
+function makeDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  downloadA.href = url;
+  downloadA.download = filename;
+  downloadA.style.display = "inline-block";
+  downloadA.textContent = `Télécharger : ${filename}`;
 }
+
+async function fetchAudio(url) {
+  setProgress(0);
+  setStatus("Téléchargement du fichier…");
+
+  // Basic block: prevent obvious platform links (UX + compliance)
+  const blocked = /(youtube\.com|youtu\.be|soundcloud\.com|spotify\.com)/i;
+  if (blocked.test(url)) {
+    throw new Error("Lien de plateforme non supporté. Utilise une URL directe vers un fichier audio (mp3/wav/ogg…).");
+  }
+
+  // Optional: give user a hint early
+  if (!isDirectAudioUrl(url)) {
+    setStatus("Le lien ne ressemble pas à un fichier audio direct. Je tente quand même…");
+  }
+
+  const res = await fetch(url, { mode: "cors" });
+
+  if (!res.ok) throw new Error(`HTTP ${res.status} — impossible de récupérer le fichier.`);
+
+  const mime = res.headers.get("content-type")?.split(";")[0]?.trim() || "application/octet-stream";
+  if (!mime.startsWith("audio/") && mime !== "application/ogg") {
+    throw new Error(`Le serveur ne renvoie pas un type audio (Content-Type: ${mime}).`);
+  }
+
+  const buf = new Uint8Array(await res.arrayBuffer());
+  const name = filenameFromUrl(url, "audio") || "audio";
+  return { bytes: buf, name, mime };
+}
+
+loadBtn.addEventListener("click", async () => {
+  downloadA.style.display = "none";
+  convertBtn.disabled = true;
+  loaded = null;
+
+  const url = urlInput.value.trim();
+  if (!url) return setStatus("Colle une URL d’un fichier audio.");
+
+  try {
+    const audio = await fetchAudio(url);
+    loaded = audio;
+    setStatus(`Fichier chargé : ${audio.name} (${audio.mime})`);
+    convertBtn.disabled = false;
+  } catch (e) {
+    setStatus(`Erreur : ${e.message}`);
+    setProgress(0);
+  }
+});
 
 convertBtn.addEventListener("click", async () => {
+  downloadA.style.display = "none";
+  setProgress(0);
+
+  if (!loaded) return setStatus("Aucun fichier chargé.");
+
   const bitrate = bitrateEl.value;
-  log("Conversion en cours…");
 
-  for (const f of files) {
-    const li = f._li;
-    li._status.textContent = "Conversion…";
-    li._bar.style.width = "15%";
+  try {
+    setStatus("Chargement du moteur de conversion (FFmpeg)…");
+    if (!ffmpeg.isLoaded()) await ffmpeg.load();
 
-    try {
-      const mp3Blob = await convertOne(f, bitrate);
-      li._bar.style.width = "100%";
-      li._status.textContent = "Terminé ✅";
-      downloadBlob(mp3Blob, f.name.replace(/\.[^/.]+$/, "") + ".mp3");
-    } catch (err) {
-      li._bar.style.width = "0%";
-      li._status.textContent = "Erreur";
-      log(`Erreur sur ${f.name} : ${err.message}`);
-    }
+    // Input / output filenames in FFmpeg FS
+    const inExt = guessExtFromMime(loaded.mime);
+    const inName = `input.${inExt}`;
+    const outName = "output.mp3";
+
+    setStatus("Préparation…");
+    ffmpeg.FS("writeFile", inName, loaded.bytes);
+
+    setStatus("Conversion en MP3…");
+    // -vn: no video; -b:a bitrate
+    await ffmpeg.run("-i", inName, "-vn", "-b:a", `${bitrate}k`, outName);
+
+    const mp3Data = ffmpeg.FS("readFile", outName);
+    const mp3Blob = new Blob([mp3Data.buffer], { type: "audio/mpeg" });
+
+    // Cleanup
+    try { ffmpeg.FS("unlink", inName); } catch {}
+    try { ffmpeg.FS("unlink", outName); } catch {}
+
+    setProgress(100);
+    setStatus("Terminé ✅");
+    const base = loaded.name.replace(/\.[^/.]+$/, "");
+    makeDownload(mp3Blob, `${base}.mp3`);
+  } catch (e) {
+    setStatus(`Erreur conversion : ${e.message}`);
+    setProgress(0);
   }
 });
