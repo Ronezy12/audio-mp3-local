@@ -1,42 +1,194 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>URL Audio → MP3 (légal)</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mon DJ Downloader SoundCloud Perso</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #0a0015, #200040);
+      color: #e0d0ff;
+      margin: 0;
+      padding: 40px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    h1 {
+      text-shadow: 0 2px 10px rgba(255, 100, 200, 0.5);
+      margin-bottom: 30px;
+    }
+    .box {
+      background: rgba(30, 10, 60, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 100, 200, 0.3);
+      border-radius: 20px;
+      padding: 30px;
+      width: 100%;
+      max-width: 500px;
+      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.8);
+    }
+    input[type="url"] {
+      width: 100%;
+      padding: 14px;
+      font-size: 1.1rem;
+      border: 2px solid #666;
+      border-radius: 12px;
+      background: #111;
+      color: #fff;
+      margin-bottom: 20px;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 14px 40px;
+      font-size: 1.15rem;
+      background: linear-gradient(90deg, #ff4d80, #ff3399);
+      color: white;
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.3s;
+      width: 100%;
+    }
+    button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 8px 25px rgba(255, 51, 153, 0.5);
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    #preview {
+      width: 100%;
+      margin: 20px 0;
+    }
+    #status {
+      margin-top: 15px;
+      padding: 10px;
+      background: rgba(0, 0, 0, 0.4);
+      border-radius: 10px;
+      text-align: center;
+    }
+    #progress {
+      width: 100%;
+      background: #222;
+      border-radius: 8px;
+      height: 8px;
+      margin-top: 10px;
+    }
+    #progress-bar {
+      height: 100%;
+      background: #ff3399;
+      width: 0%;
+      border-radius: 8px;
+      transition: width 0.3s;
+    }
+  </style>
 </head>
 <body>
-  <main class="card">
-    <h1>URL audio → MP3</h1>
-    <p class="sub">
-      Colle une URL qui pointe vers un <b>fichier audio direct</b> (mp3/wav/ogg…). Pas de plateformes (YouTube/Spotify/SoundCloud).
-    </p>
 
-    <div class="row">
-      <input id="urlInput" type="url" placeholder="https://exemple.com/mon-audio.wav" />
-      <button id="loadBtn" class="btn">Charger</button>
-    </div>
+<h1>Mon Downloader SoundCloud DJ Perso 🚀</h1>
 
-    <div class="row">
-      <label>Bitrate</label>
-      <select id="bitrate">
-        <option value="128">128 kbps</option>
-        <option value="192" selected>192 kbps</option>
-        <option value="256">256 kbps</option>
-        <option value="320">320 kbps</option>
-      </select>
-      <button id="convertBtn" class="btn primary" disabled>Convertir MP3</button>
-    </div>
+<div class="box">
+  <input type="url" id="scUrl" placeholder="Colle le lien SoundCloud (ex: https://soundcloud.com/artist/track)">
+  <button id="dlBtn" disabled>Télécharger le son ↓</button>
+  <audio id="preview" controls></audio>
+  <div id="status"></div>
+  <div id="progress"><div id="progress-bar"></div></div>
+</div>
 
-    <div class="progress"><div id="bar"></div></div>
-    <p id="status" class="status"></p>
+<script>
+  const clientId = 'SWryhheJAEfH6KDCQvVYHOvn50SitwbU'; // Ton ID perso intégré !
+  const urlInput = document.getElementById('scUrl');
+  const dlBtn = document.getElementById('dlBtn');
+  const preview = document.getElementById('preview');
+  const status = document.getElementById('status');
+  const progressBar = document.getElementById('progress-bar');
 
-    <a id="download" class="btn" style="display:none;">Télécharger le MP3</a>
-  </main>
+  // Active bouton si lien valide
+  urlInput.addEventListener('input', () => {
+    const url = urlInput.value.trim();
+    dlBtn.disabled = !(url && url.includes('soundcloud.com'));
+  });
 
-  <!-- FFmpeg.wasm -->
-  <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/ffmpeg.min.js"></script>
-  <script src="app.js"></script>
+  dlBtn.addEventListener('click', () => {
+    const trackUrl = urlInput.value.trim();
+    status.textContent = 'Recherche du track...';
+    dlBtn.disabled = true;
+    progressBar.style.width = '0%';
+
+    // Résout le track via API SoundCloud
+    const resolveUrl = `https://api.soundcloud.com/resolve?url=${encodeURIComponent(trackUrl)}&client_id=${clientId}`;
+    const proxy = 'https://corsproxy.io/?'; // Proxy récent et gratuit (change si down : 'https://cors.sh/' ou 'https://allorigins.win/get?url=')
+
+    fetch(proxy + encodeURIComponent(resolveUrl))
+      .then(res => res.json())
+      .then(track => {
+        if (!track.streamable) {
+          throw new Error('Track non streamable/downloadable.');
+        }
+        status.textContent = `Track trouvé : ${track.title}`;
+
+        let dlUrl = '';
+        if (track.downloadable && track.download_url) {
+          dlUrl = `${track.download_url}?client_id=${clientId}`;
+          status.textContent += ' (Download direct !)';
+        } else {
+          dlUrl = `${track.stream_url}?client_id=${clientId}`;
+          status.textContent += ' (Via stream)';
+        }
+
+        preview.src = proxy + encodeURIComponent(dlUrl);
+        preview.style.display = 'block';
+
+        // Download avec progress bar via XMLHttpRequest
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', proxy + encodeURIComponent(dlUrl), true);
+        xhr.responseType = 'blob';
+
+        xhr.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const percent = (e.loaded / e.total) * 100;
+            progressBar.style.width = `${percent}%`;
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status === 200) {
+            const blob = xhr.response;
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = `${track.title.replace(/[^a-z0-9]/gi, '_')}.mp3`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(blobUrl);
+            status.textContent = 'Téléchargement terminé ! 🎧';
+            progressBar.style.width = '100%';
+          } else {
+            status.textContent = `Erreur download (code ${xhr.status})`;
+          }
+          dlBtn.disabled = false;
+        };
+
+        xhr.onerror = () => {
+          status.textContent = 'Erreur réseau (vérifie proxy ou CORS)';
+          dlBtn.disabled = false;
+        };
+
+        xhr.send();
+      })
+      .catch(err => {
+        status.textContent = `Erreur : ${err.message} (Vérifie le lien ou client_id)`;
+        dlBtn.disabled = false;
+      });
+  });
+</script>
+
 </body>
 </html>
