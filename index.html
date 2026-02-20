@@ -3,44 +3,40 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Audio → MP3 (local)</title>
+  <title>URL Audio → MP3 (légal)</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <main class="card">
-    <h1>Convertisseur audio (local → MP3)</h1>
+    <h1>URL audio → MP3</h1>
     <p class="sub">
-      Ce site convertit uniquement des fichiers que tu importes depuis ton ordinateur (usage légal).
+      Colle une URL qui pointe vers un <b>fichier audio direct</b> (mp3/wav/ogg…). Pas de plateformes (YouTube/Spotify/SoundCloud).
     </p>
 
-    <section id="dropzone" class="dropzone" aria-label="Zone de dépôt">
-      <input id="fileInput" type="file" accept="audio/*" multiple hidden />
-      <button id="pickBtn" class="btn">Choisir des fichiers</button>
-      <p>ou glisse-dépose ici</p>
-    </section>
+    <div class="row">
+      <input id="urlInput" type="url" placeholder="https://exemple.com/mon-audio.wav" />
+      <button id="loadBtn" class="btn">Charger</button>
+    </div>
 
-    <section class="controls">
-      <label class="row">
-        <span>Bitrate MP3</span>
-        <select id="bitrate">
-          <option value="128">128 kbps</option>
-          <option value="192" selected>192 kbps</option>
-          <option value="256">256 kbps</option>
-          <option value="320">320 kbps</option>
-        </select>
-      </label>
+    <div class="row">
+      <label>Bitrate</label>
+      <select id="bitrate">
+        <option value="128">128 kbps</option>
+        <option value="192" selected>192 kbps</option>
+        <option value="256">256 kbps</option>
+        <option value="320">320 kbps</option>
+      </select>
+      <button id="convertBtn" class="btn primary" disabled>Convertir MP3</button>
+    </div>
 
-      <button id="convertBtn" class="btn primary" disabled>Convertir</button>
-    </section>
+    <div class="progress"><div id="bar"></div></div>
+    <p id="status" class="status"></p>
 
-    <section>
-      <h2>Fichiers</h2>
-      <ul id="fileList" class="filelist"></ul>
-    </section>
-
-    <section id="log" class="log" aria-live="polite"></section>
+    <a id="download" class="btn" style="display:none;">Télécharger le MP3</a>
   </main>
 
+  <!-- FFmpeg.wasm -->
+  <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/ffmpeg.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
