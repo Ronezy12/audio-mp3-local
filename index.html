@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Audio → MP3 (local)</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="card">
+    <h1>Convertisseur audio (local → MP3)</h1>
+    <p class="sub">
+      Ce site convertit uniquement des fichiers que tu importes depuis ton ordinateur (usage légal).
+    </p>
+
+    <section id="dropzone" class="dropzone" aria-label="Zone de dépôt">
+      <input id="fileInput" type="file" accept="audio/*" multiple hidden />
+      <button id="pickBtn" class="btn">Choisir des fichiers</button>
+      <p>ou glisse-dépose ici</p>
+    </section>
+
+    <section class="controls">
+      <label class="row">
+        <span>Bitrate MP3</span>
+        <select id="bitrate">
+          <option value="128">128 kbps</option>
+          <option value="192" selected>192 kbps</option>
+          <option value="256">256 kbps</option>
+          <option value="320">320 kbps</option>
+        </select>
+      </label>
+
+      <button id="convertBtn" class="btn primary" disabled>Convertir</button>
+    </section>
+
+    <section>
+      <h2>Fichiers</h2>
+      <ul id="fileList" class="filelist"></ul>
+    </section>
+
+    <section id="log" class="log" aria-live="polite"></section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
